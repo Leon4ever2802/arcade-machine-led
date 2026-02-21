@@ -4,10 +4,8 @@ import colorsys
 import threading
 import signal
 import sys
-import board
-import busio
-import neopixel_spi
 import select
+from apa102_pi.driver import apa102
 
 from evdev import InputDevice, ecodes
 
@@ -18,19 +16,13 @@ NUM_LEDS = 30
 BRIGHTNESS = 0.3
 
 DEVICE_PATH = "/dev/input/by-id/usb-DragonRise_Inc._Generic_USB_Joystick-event-joystick"
-BUTTON_CODE = 298  # BTN_BASE5
+BUTTON_CODE = 292  # BTN_TOP2
+
 
 # ----------------------------
 # LED SETUP
 # ----------------------------
-spi = busio.SPI(clock=board.SCK, MOSI=board.MOSI)
-
-pixels = neopixel_spi.NeoPixel_SPI(
-    spi,
-    NUM_LEDS,
-    brightness=BRIGHTNESS,
-    auto_write=False
-)
+strip = apa102.APA102(num_led=NUM_LEDS)
 
 mode = 0
 running = True
@@ -44,8 +36,8 @@ def cleanup(signum=None, frame=None):
     global running
     print("Service stopping, turning off LEDs...")
     running = False
-    pixels.fill((0, 0, 0))
-    pixels.show()
+    strip.clear_strip()
+    strip.show()
     sys.exit(0)
 
 
@@ -67,40 +59,41 @@ def hsv_color(h, s=1.0, v=1.0):
 def rainbow(step):
     for pixel in range(NUM_LEDS):
         hue = (pixel / NUM_LEDS + step) % 1.0
-        pixels[pixel] = hsv_color(hue)
-    pixels.show()
+        color = hsv_color(hue)
+        strip.set_pixel(pixel, color[0], color[1], color[2])
+    strip.show()
 
 
 def breathe_outwards(t, base_hue):
     center = (NUM_LEDS - 1) / 2
     breath = (math.sin(t) + 1) / 2
     color = hsv_color(base_hue)
-    for i in range(NUM_LEDS):
-        dist = abs(i - center)
+    for pixel in range(NUM_LEDS):
+        dist = abs(pixel - center)
         falloff = max(0.0, 1.0 - (dist / center))
         brightness = breath * falloff
         r = int(color[0] * brightness)
         g = int(color[1] * brightness)
         b = int(color[2] * brightness)
-        pixels[i] = (r, g, b)
-    pixels.show()
+        strip.set_pixel(pixel, r, g, b)
+    strip.show()
 
 
 def scanner(position, hue):
-    pixels.fill((0, 0, 0))
+    strip.clear_strip()
     color_main = hsv_color(hue)
     pos = int(position) % NUM_LEDS
-    pixels[pos] = color_main
+    strip.set_pixel(pos, color_main[0], color_main[1], color_main[2])
     for offset in range(1, 6):
         fade = max(0.0, 1.0 - (offset / 6))
         r = int(color_main[0] * fade)
         g = int(color_main[1] * fade)
         b = int(color_main[2] * fade)
         if pos - offset >= 0:
-            pixels[pos - offset] = (r, g, b)
+            strip.set_pixel((pos - offset), r, g, b)
         if pos + offset < NUM_LEDS:
-            pixels[pos + offset] = (r, g, b)
-    pixels.show()
+            strip.set_pixel((pos + offset), r, g, b)
+    strip.show()
 
 
 # ----------------------------
