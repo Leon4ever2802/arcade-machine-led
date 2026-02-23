@@ -24,7 +24,7 @@ BUTTON_CODE = 292  # BTN_TOP2
 # ----------------------------
 strip = apa102.APA102(num_led=NUM_LEDS)
 
-mode = 0
+colorful_mode = 0
 running = True
 mode_lock = threading.Lock()
 
@@ -100,7 +100,7 @@ def scanner(position, hue):
 # INPUT THREAD (nur BTN_BASE5)
 # ----------------------------
 def input_listener():
-    global mode, running
+    global colorful_mode, running
     dev = InputDevice(DEVICE_PATH)
     last_press = 0
 
@@ -124,7 +124,7 @@ def input_listener():
 # MAIN LOOP
 # ----------------------------
 def main():
-    global mode, running
+    global colorful_mode, running
     rainbow_step = 0.0
     breath_t = 0.0
     breath_hue = 0.0
