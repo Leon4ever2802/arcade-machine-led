@@ -5,20 +5,16 @@ import threading
 import signal
 import sys
 
-import select
 from apa102_pi.driver import apa102
 
-from evdev import InputDevice, ecodes
+from evdev import InputDevice, ecodes, categorize
 
 # ----------------------------
 # CONFIG
 # ----------------------------
 NUM_LEDS = 30
-BRIGHTNESS = 0.3
-
-DEVICE_PATH = "/dev/input/by-id/usb-DragonRise_Inc._Generic_USB_Joystick-event-joystick"
-LED_BUTTON_CODE = 292  # BTN_TOP2
-
+device = InputDevice("/dev/input/event0")
+led_button = ecodes.BTN_TOP2
 strip = apa102.APA102(num_led=NUM_LEDS)
 
 # 0 = Colorful, 1 = Static, 2 = Off
@@ -99,51 +95,43 @@ def scanner(position, hue):
 
 
 # ----------------------------
-# INPUT THREAD (nur BTN_BASE5)
+# INPUT THREAD
 # ----------------------------
 def input_listener():
     global mode, current_mode_type, running
-    device = InputDevice(DEVICE_PATH)
     last_press = 0
     last_release = 0
 
-    while running:
-        read, write, execute = select.select([device], [], [], 0.01)
+    try:
+        for event in device.read_loop():
+            if event.type != ecodes.EV_KEY or event.code != led_button:
+                continue
 
-        if device not in read:
-            continue
+            key_event = categorize(event)
+            now = time.time()
 
-        try:
-            for event in device.read():
+            if key_event.keystate == key_event.key_down and now - last_press > 0.25:
+                last_press = now
 
-                # Alle anderen Buttons ausser LED-Button ignorieren
-                if event.type != ecodes.EV_KEY or event.code != LED_BUTTON_CODE:
-                    continue
+            elif key_event.keystate == key_event.key_up and now - last_release > 0.25:
+                last_release = now
 
-                now = time.time()
+                if last_release - last_press > 2:
+                    with mode_lock:
+                        mode = (mode + 1) % 3
+                        current_mode_type = 0
 
-                if event.value == 1 and now - last_press > 0.25:
-                    last_press = now
-
-                elif event.value == 4 and now - last_release > 0.25:
-                    last_release = now
-
-                    if last_release - last_press > 2:
+                else:
+                    if mode == 0:
                         with mode_lock:
-                            mode = (mode + 1) % 3
-                            current_mode_type = 0
+                            current_mode_type = (current_mode_type + 1) % 3
+                    elif mode == 1:
+                        with mode_lock:
+                            current_mode_type = (current_mode_type + 1) % 6
 
-                    else:
-                        if mode == 0:
-                            with mode_lock:
-                                current_mode_type = (current_mode_type + 1) % 3
-                        elif mode == 1:
-                            with mode_lock:
-                                current_mode_type = (current_mode_type + 1) % 6
-
-        except OSError as e:
-            if e.errno != 11:  # Resource temporarily unavailable
-                print("Fehler im Input Listener:", e)
+    except OSError as e:
+        if e.errno != 11:  # Resource temporarily unavailable
+            print("Fehler im Input Listener:", e)
 
 
 # ----------------------------
