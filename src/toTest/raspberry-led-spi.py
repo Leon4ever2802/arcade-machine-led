@@ -46,9 +46,19 @@ signal.signal(signal.SIGINT, cleanup)
 # ----------------------------
 # HELPER
 # ----------------------------
-def hsv_color(h, s=1.0, v=1.0):
+def convert_hsv_to_rgb(h, s=1.0, v=1.0):
     r, g, b = colorsys.hsv_to_rgb(h % 1.0, s, v)
     return int(r * 255), int(g * 255), int(b * 255)
+
+def update_current_mode_type():
+    global mode, current_mode_type
+
+    if mode == 0:
+        with mode_lock:
+            current_mode_type = (current_mode_type + 1) % 3
+    elif mode == 1:
+        with mode_lock:
+            current_mode_type = (current_mode_type + 1) % 6
 
 
 # ----------------------------
@@ -57,15 +67,15 @@ def hsv_color(h, s=1.0, v=1.0):
 def rainbow(step):
     for pixel in range(NUM_LEDS):
         hue = (pixel / NUM_LEDS + step) % 1.0
-        r, g, b = hsv_color(hue)
+        r, g, b = convert_hsv_to_rgb(hue)
         strip.set_pixel(pixel, r, g, b)
     strip.show()
 
 
-def breathe_outwards(t, base_hue):
+def breathe(time, base_hue):
     center = (NUM_LEDS - 1) / 2
-    breath = (math.sin(t) + 1) / 2
-    base_r, base_g, base_b = hsv_color(base_hue)
+    breath = (math.sin(time) + 1) / 2
+    base_r, base_g, base_b = convert_hsv_to_rgb(base_hue)
     for pixel in range(NUM_LEDS):
         dist = abs(pixel - center)
         falloff = max(0.0, 1.0 - (dist / center))
@@ -79,7 +89,7 @@ def breathe_outwards(t, base_hue):
 
 def scanner(position, hue):
     strip.clear_strip()
-    main_r, main_g, main_b = hsv_color(hue)
+    main_r, main_g, main_b = convert_hsv_to_rgb(hue)
     pos = int(position) % NUM_LEDS
     strip.set_pixel(pos, main_r, main_g, main_b)
     for offset in range(1, 6):
@@ -120,14 +130,10 @@ def input_listener():
                     with mode_lock:
                         mode = (mode + 1) % 3
                         current_mode_type = 0
+                    continue
 
-                else:
-                    if mode == 0:
-                        with mode_lock:
-                            current_mode_type = (current_mode_type + 1) % 3
-                    elif mode == 1:
-                        with mode_lock:
-                            current_mode_type = (current_mode_type + 1) % 6
+                update_current_mode_type()
+
 
     except OSError as e:
         if e.errno != 11:  # Resource temporarily unavailable
@@ -153,36 +159,36 @@ def main():
             current_mode = mode
             current_mode_type = current_mode_type
 
-        if current_mode == 0:
-            if current_mode_type == 0:
+        match (current_mode, current_mode_type):
+            case (0, 0):
                 rainbow(rainbow_step)
                 rainbow_step += 0.002  # Geschwindigkeit Rainbow
 
-            elif current_mode_type == 1:
-                breathe_outwards(breath_t, breath_hue)
+            case (0, 1):
+                breathe(breath_t, breath_hue)
                 current_breath = (math.sin(breath_t) + 1) / 2
                 if current_breath < 0.05 <= last_breath:
                     breath_hue += 0.12  # Farbwechsel pro Zyklus
                 last_breath = current_breath
                 breath_t += 0.06  # Geschwindigkeit Breath
 
-            elif current_mode_type == 2:
+            case (0, 2):
                 scanner(scanner_pos, scanner_hue)
                 scanner_pos += 0.3  # Geschwindigkeit Scanner
                 scanner_hue += 0.002  # Farbshift
 
-        elif current_mode == 1 and current_static_color != static_colors[current_mode_type]:
-            strip.clear_strip()
-            for pixel in range(NUM_LEDS):
-                r, g, b = static_colors[current_mode_type]
-                strip.set_pixel(pixel, r, g, b)
-            strip.show()
-            current_static_color = static_colors[current_mode_type]
+            case (1, _) if current_static_color != static_colors[current_mode_type]:
+                strip.clear_strip()
+                for pixel in range(NUM_LEDS):
+                    r, g, b = static_colors[current_mode_type]
+                    strip.set_pixel(pixel, r, g, b)
+                strip.show()
+                current_static_color = static_colors[current_mode_type]
 
-        elif current_mode == 2 and current_static_color != (0, 0, 0):
-            strip.clear_strip()
-            strip.show()
-            current_static_color = (0, 0, 0)
+            case (2, _) if current_static_color != (0, 0, 0):
+                strip.clear_strip()
+                strip.show()
+                current_static_color = (0, 0, 0)
 
         time.sleep(0.02)
 
