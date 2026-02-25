@@ -159,12 +159,12 @@ def main():
             current_mode = mode
             current_mode_type = current_mode_type
 
-        match (current_mode, current_mode_type):
-            case (0, 0):
+        if current_mode == 0:
+            if current_mode_type == 0:
                 rainbow(rainbow_step)
                 rainbow_step += 0.002  # Geschwindigkeit Rainbow
 
-            case (0, 1):
+            elif current_mode_type == 1:
                 breathe(breath_t, breath_hue)
                 current_breath = (math.sin(breath_t) + 1) / 2
                 if current_breath < 0.05 <= last_breath:
@@ -172,23 +172,23 @@ def main():
                 last_breath = current_breath
                 breath_t += 0.06  # Geschwindigkeit Breath
 
-            case (0, 2):
+            elif current_mode_type == 2:
                 scanner(scanner_pos, scanner_hue)
                 scanner_pos += 0.3  # Geschwindigkeit Scanner
                 scanner_hue += 0.002  # Farbshift
 
-            case (1, _) if current_static_color != static_colors[current_mode_type]:
-                strip.clear_strip()
-                for pixel in range(NUM_LEDS):
-                    r, g, b = static_colors[current_mode_type]
-                    strip.set_pixel(pixel, r, g, b)
-                strip.show()
-                current_static_color = static_colors[current_mode_type]
+        if current_mode == 1 and current_static_color != static_colors[current_mode_type]:
+            strip.clear_strip()
+            for pixel in range(NUM_LEDS):
+                r, g, b = static_colors[current_mode_type]
+                strip.set_pixel(pixel, r, g, b)
+            strip.show()
+            current_static_color = static_colors[current_mode_type]
 
-            case (2, _) if current_static_color != (0, 0, 0):
-                strip.clear_strip()
-                strip.show()
-                current_static_color = (0, 0, 0)
+        if current_mode == 2 and current_static_color != (0, 0, 0):
+            strip.clear_strip()
+            strip.show()
+            current_static_color = (0, 0, 0)
 
         time.sleep(0.02)
 
