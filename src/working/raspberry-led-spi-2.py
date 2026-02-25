@@ -12,7 +12,7 @@ from evdev import InputDevice, ecodes, categorize
 # ----------------------------
 # CONFIG
 # ----------------------------
-NUM_LEDS = 30
+NUM_LEDS = 65
 device = InputDevice("/dev/input/event0")
 led_button = ecodes.BTN_TOP2
 strip = apa102.APA102(num_led=NUM_LEDS)
@@ -64,17 +64,9 @@ def update_current_mode_type():
 # ----------------------------
 # EFFECTS
 # ----------------------------
-def rainbow(step):
-    for pixel in range(NUM_LEDS):
-        hue = (pixel / NUM_LEDS + step) % 1.0
-        r, g, b = convert_hsv_to_rgb(hue)
-        strip.set_pixel(pixel, r, g, b)
-    strip.show()
-
-
-def breathe(time, base_hue):
+def breathe(breathe_time, base_hue):
     center = (NUM_LEDS - 1) / 2
-    breath = (math.sin(time) + 1) / 2
+    breath = (math.sin(breathe_time) + 1) / 2
     base_r, base_g, base_b = convert_hsv_to_rgb(base_hue)
     for pixel in range(NUM_LEDS):
         dist = abs(pixel - center)
@@ -90,7 +82,7 @@ def breathe(time, base_hue):
 def scanner(position, hue):
     strip.clear_strip()
     main_r, main_g, main_b = convert_hsv_to_rgb(hue)
-    pos = int(position) % NUM_LEDS
+    pos = int(position) % NUM_LEDS - 3
     strip.set_pixel(pos, main_r, main_g, main_b)
     for offset in range(1, 6):
         fade = max(0.0, 1.0 - (offset / 6))
@@ -101,6 +93,12 @@ def scanner(position, hue):
             strip.set_pixel((pos - offset), r, g, b)
         if pos + offset < NUM_LEDS:
             strip.set_pixel((pos + offset), r, g, b)
+    strip.show()
+
+def epilepsy(hue):
+    for pixel in range(NUM_LEDS):
+        r, g, b = convert_hsv_to_rgb(hue)
+        strip.set_pixel(pixel, r, g, b)
     strip.show()
 
 
@@ -145,12 +143,15 @@ def input_listener():
 # ----------------------------
 def main():
     global mode, current_mode_type, running
-    rainbow_step = 0.0
     breath_t = 0.0
     breath_hue = 0.0
     last_breath = 0.0
+
     scanner_pos = 0.0
     scanner_hue = 0.0
+    scanner_direction = 1  # 1 = vorwärts, -1 = rückwärts
+
+    epilepsy_hue = 0.0
 
     current_static_color = (0, 0, 0)
 
@@ -161,23 +162,27 @@ def main():
 
         if current_mode == 0:
             if current_mode_type == 0:
-                rainbow(rainbow_step)
-                rainbow_step += 0.002  # Geschwindigkeit Rainbow
-
-            elif current_mode_type == 1:
                 breathe(breath_t, breath_hue)
                 current_breath = (math.sin(breath_t) + 1) / 2
                 if current_breath < 0.05 <= last_breath:
                     breath_hue += 0.12  # Farbwechsel pro Zyklus
                 last_breath = current_breath
-                breath_t += 0.06  # Geschwindigkeit Breath
+                breath_t += 0.04  # Geschwindigkeit Breath
+
+            elif current_mode_type == 1:
+                scanner(scanner_pos, scanner_hue)
+                if scanner_pos >= NUM_LEDS - 1:
+                    scanner_direction = -1
+                elif scanner_pos <= 0:
+                    scanner_direction = 1
+                scanner_pos += 0.35 * scanner_direction # Geschwindigkeit Scanner
+                scanner_hue += 0.002 # Farbshift
 
             elif current_mode_type == 2:
-                scanner(scanner_pos, scanner_hue)
-                scanner_pos += 0.3  # Geschwindigkeit Scanner
-                scanner_hue += 0.002  # Farbshift
+                epilepsy(epilepsy_hue)
+                epilepsy_hue += 0.12
 
-        if current_mode == 1 and current_static_color != static_colors[current_mode_type]:
+        elif current_mode == 1 and current_static_color != static_colors[current_mode_type]:
             strip.clear_strip()
             for pixel in range(NUM_LEDS):
                 r, g, b = static_colors[current_mode_type]
@@ -185,7 +190,7 @@ def main():
             strip.show()
             current_static_color = static_colors[current_mode_type]
 
-        if current_mode == 2 and current_static_color != (0, 0, 0):
+        elif current_mode == 2 and current_static_color != (0, 0, 0):
             strip.clear_strip()
             strip.show()
             current_static_color = (0, 0, 0)
